@@ -39,6 +39,12 @@ class GitBaseDirResolver {
       if (new File(baseDir, gitDirName).exists()) {
         return optBaseDir
       }
+      var customDir = new File(baseDir, "custom")
+      if (customDir.exists()) {
+        if (new File(customDir, gitDirName).exists()) {
+          return Option(customDir)
+        }
+      }
       findRepositoryBaseDir(Option(baseDir.getParentFile), gitDirName)
     case None => None
   }
