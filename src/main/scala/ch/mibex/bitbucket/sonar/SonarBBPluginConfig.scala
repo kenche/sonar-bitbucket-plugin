@@ -30,6 +30,8 @@ class SonarBBPluginConfig(settings: Settings, server: Server) {
 
   def buildStatusEnabled(): Boolean = settings.getBoolean(SonarBBPlugin.BitbucketBuildStatus)
 
+  def sonarApprovalSeverityLevel(): String = settings.getString(SonarBBPlugin.SonarUnapprovalSeverityLevel)
+
   def branchName(): String = {
     var branchName = settings.getString(SonarBBPlugin.BitbucketBranchName)
     Option(branchName) foreach { _ =>
@@ -46,7 +48,7 @@ class SonarBBPluginConfig(settings: Settings, server: Server) {
   private def branchIllegalCharReplacement() = // we cannot use "" as defaultValue with SonarQube settings
     Option(settings.getString(SonarBBPlugin.SonarQubeIllegalBranchCharReplacement)).getOrElse("")
 
-  def validate(): Unit = {
+  def validateOrThrow(): Unit = {
     require(
       Option(server.getVersion).isEmpty || server.getVersion != "5.1",
       s"${SonarBBPlugin.PluginLogPrefix} SonarQube v5.1 is not supported because of issue SONAR-6398"

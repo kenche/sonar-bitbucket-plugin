@@ -9,6 +9,7 @@ import com.sun.jersey.api.client.config.{ClientConfig, DefaultClientConfig}
 import com.sun.jersey.api.client.filter.LoggingFilter
 import com.sun.jersey.api.client.{Client, ClientResponse, UniformInterfaceException}
 import com.sun.jersey.client.urlconnection.{HttpURLConnectionFactory, URLConnectionClientHandler}
+import org.sonar.api.batch.rule.Severity
 import org.sonar.api.batch.{BatchSide, InstantiationStrategy}
 import org.sonar.api.utils.log.Loggers
 
@@ -30,10 +31,11 @@ sealed trait BuildStatus {
   def name: String
   def description: String
 }
-case class FailingBuildStatus(numBlocker: Int, numCritical: Int) extends BuildStatus {
+case class FailingBuildStatus(severity: Severity, numIssues: Int) extends BuildStatus {
   val name = "FAILED"
-  val description = s"Sonar analysis failed. $numBlocker blocker and $numCritical critical issues found."
+  val description = s"Sonar analysis failed. Found $numIssues issues with severity >= $severity"
 }
+
 case object InProgressBuildStatus extends BuildStatus {
   val name = "INPROGRESS"
   val description = "Sonar analysis in progress..."
@@ -89,7 +91,7 @@ class BitbucketClient(config: SonarBBPluginConfig) {
   }
 
   private def createResource(apiVersion: String) =
-    client.resource(s"https://bitbucket.org/api/$apiVersion/repositories/${config.accountName()}/${config.repoSlug()}")
+    client.resource(s"https://api.bitbucket.org/$apiVersion/repositories/${config.accountName()}/${config.repoSlug()}")
 
   private def mapToPullRequest(pullRequest: Map[String, Any]): PullRequest = {
     val source = pullRequest("source").asInstanceOf[Map[String, Any]]
@@ -142,7 +144,8 @@ class BitbucketClient(config: SonarBBPluginConfig) {
   def findOwnPullRequestComments(pullRequest: PullRequest): Seq[PullRequestComment] = {
 
     def isFromUs(comment: Map[String, Any]): Boolean =
-      comment("user").asInstanceOf[Map[String, Any]]("uuid").asInstanceOf[String] equals uuid
+      Option(comment("user").asInstanceOf[Map[String, Any]])
+        .getOrElse(Map("uuid" -> ""))("uuid").asInstanceOf[String] equals uuid
 
     def fetchPullRequestCommentsPage(start: Int): (Option[Int], Seq[PullRequestComment]) = {
       fetchPage(s"/pullrequests/${pullRequest.id}/comments", f =
@@ -326,7 +329,7 @@ class BitbucketClient(config: SonarBBPluginConfig) {
   private def getLoggedInUserUUID: String = {
     try {
       val response = client
-        .resource(s"https://bitbucket.org/api/2.0/user")
+        .resource(s"https://api.bitbucket.org/2.0/user")
         .accept(MediaType.APPLICATION_JSON)
         .get(classOf[String])
       val user = JsonUtils.mapFromJson(response)
